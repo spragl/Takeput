@@ -4,7 +4,7 @@ File::Takeput - Slurp style file IO with locking.
 
 # VERSION
 
-0.10
+0.11
 
 # SYNOPSIS
 
@@ -176,7 +176,7 @@ There are six configuration parameters.
 
     Setting this parameter does not change the value of $/ or vice versa.
 
-    The "separator" value cannot de an empty string. If it is undef the data is seen as a single string.
+    The "separator" value cannot be an empty string. If it is undef the data is seen as a single string.
 
 ## CONFIGURATION OPTIONS
 

@@ -10,7 +10,7 @@ use strict;
 use experimental qw(signatures);
 # use Exporter qw(import);
 
-our $VERSION = 0.10;
+our $VERSION = 0.11;
 
 use Fcntl qw(O_CREAT O_RDONLY O_RDWR O_WRONLY :flock);
 use File::Basename qw(basename dirname);
@@ -37,7 +37,7 @@ our @EXPORT_OK = qwac '
     set    # Set default values.
     ';
 
-# --------------------------------------------------------------------------- #
+# ------------------------------------------------------------------------- #
 # Globals and defaults.
 
 my $urdefault = {
@@ -53,7 +53,7 @@ $default = {$urdefault->%*};
 
 my %imfh = (); # Hash for holding implicit filehandles.
 
-# - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - #
+# - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - #
 
 my $errh_msg;
 
@@ -156,55 +156,60 @@ my sub full_setting( $s ) {
 
     }; # sub full_setting
 
-# - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - #
+# - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - #
 
 sub import( @implist ) {
     my $mynsp = shift @implist;
     my $clnsp = caller;
+    my %check;
+
+    if (@implist) {
+        %check = map {$_ => 1}
+          qw(create error exclusive newline patience separator);
+
+        my $cpar = {};
+        my $i = 0;
+        while ($i < @implist) {
+            my $p = $implist[$i];
+            if ($check{$p}) {
+                fatal_error('Takeput: No "'.$p.'" value.')
+                  if $i == $#implist;
+                $cpar->{$p} = $implist[$i+1];
+                splice @implist , $i , 2;
+                $i += -2;
+                };
+            $i++;
+            };
+
+        my $s = full_setting($cpar)
+          or fatal_error('Takeput: '.$errh_msg);
+        $default = $s;
+        };
 
     my sub amp( $s ) {
         return undef if not defined $s;
-        return $s
-          if $s =~ m/^(?:create|error|exclusive|newline|patience|separator)$/;
         return $s =~ s/^([^\$\@\%\&])/\&$1/r;
         };
-    my %check = map {(amp($_),1)}
-        qw(create error exclusive newline patience separator) ,
-        @EXPORT ,
-        @EXPORT_OK;
-    my sub exportcheck( $s ) {
-        return 1 if $check{$s};
-        fatal_error('Takeput: "'.$s.'" not exported.');
-        };
+    %check = map {(amp($_),1)} @EXPORT , @EXPORT_OK;
 
-    my $cpar = {};
     @implist = @EXPORT if not @implist;
     while ($_ = amp shift @implist) {
-        exportcheck($_);
+        fatal_error('Takeput: "'.$_.'" not exported.') if not $check{$_};
         no strict "refs";
         if    ( m/^\$(.*)$/ ) { *{"${clnsp}::$1"} = \$$1; }
         elsif ( m/^\@(.*)$/ ) { *{"${clnsp}::$1"} = \@$1; }
         elsif ( m/^\%(.*)$/ ) { *{"${clnsp}::$1"} = \%$1; }
-        elsif ( m/^\&(.*)$/ ) { *{"${clnsp}::$1"} = \&$1; }
-        else {
-            fatal_error('Takeput: No "'.$_.'" value.')
-              if scalar @implist == 0;
-            $cpar->{$_} = shift @implist;
-            };
+        elsif ( m/^\&(.*)$/ ) { *{"${clnsp}::$1"} = \&$1; };
         use strict "refs";
         };
 
-    my $s = full_setting($cpar)
-      or fatal_error('Takeput: '.$errh_msg);
-    $default = $s;
-
     }; # sub import
 
-# - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - #
+# - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - #
 
 1;
 
-# --------------------------------------------------------------------------- #
+# ------------------------------------------------------------------------- #
 # Private subroutines.
 
 my sub canonical( $fname ) {
@@ -291,7 +296,7 @@ my sub print_file( $fh , $s , $data ) {
         };
     1;};
 
-# --------------------------------------------------------------------------- #
+# ------------------------------------------------------------------------- #
 # Exportable subroutines.
 
 sub append( $fname , %set ) {
@@ -380,7 +385,7 @@ sub take( $fname , %set ) {
     return ftake($fname,%set)->();
     }; # sub take
 
-# - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - #
+# - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - #
 
 sub fgrab( $fname , %set ) {
 # Read content of $fname.
@@ -463,7 +468,7 @@ sub set( %set ) {
     $default = $s;
     1;};
 
-# --------------------------------------------------------------------------- #
+# ------------------------------------------------------------------------- #
 
 =pod
 
@@ -475,7 +480,7 @@ File::Takeput - Slurp style file IO with locking.
 
 =head1 VERSION
 
-0.10
+0.11
 
 =head1 SYNOPSIS
 
@@ -653,7 +658,7 @@ The string defining the end of a line. It is used in read operations to split th
 
 Setting this parameter does not change the value of $/ or vice versa.
 
-The "separator" value cannot de an empty string. If it is undef the data is seen as a single string.
+The "separator" value cannot be an empty string. If it is undef the data is seen as a single string.
 
 =back
 

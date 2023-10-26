@@ -16,7 +16,7 @@ BEGIN {
 use File::Copy;
 use lib $dir;
 
-use_ok 'File::Takeput'; # 1
+use_ok 'File::Takeput' , separator => 'x'; # 1
 
 my $fn = $tdir.'/takeput-3.txt';
 
