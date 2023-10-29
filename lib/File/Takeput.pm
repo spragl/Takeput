@@ -10,8 +10,9 @@ use strict;
 use experimental qw(signatures);
 # use Exporter qw(import);
 
-our $VERSION = 0.11;
+our $VERSION = 0.20;
 
+use Scalar::Util qw(reftype); # Later builtin::reftype
 use Fcntl qw(O_CREAT O_RDONLY O_RDWR O_WRONLY :flock);
 use File::Basename qw(basename dirname);
 use Cwd qw(abs_path);
@@ -40,16 +41,17 @@ our @EXPORT_OK = qwac '
 # ------------------------------------------------------------------------- #
 # Globals and defaults.
 
-my $urdefault = {
-    create => undef ,
-    error => undef ,
-    exclusive => undef ,
-    newline => undef ,
-    patience => 0 ,
-    separator => $/ ,
+my $default = {
+    'File::Takeput' => {
+        create => undef ,
+        error => undef ,
+        flatten => undef ,
+        exclusive => undef ,
+        newline => undef ,
+        patience => 0 ,
+        separator => $/ ,
+        } ,
     };
-my $default;
-$default = {$urdefault->%*};
 
 my %imfh = (); # Hash for holding implicit filehandles.
 
@@ -73,8 +75,8 @@ my sub advice( $msg ) {
     };
 
 
-my sub adverrh( $msg , $s ) {
-# Advice and error handler.
+my sub errah( $msg , $s ) {
+# Error advice and handling.
     $msg .= $errh_msg if $errh_msg;
     $errh_msg = undef;
     advice($msg.'');
@@ -105,31 +107,35 @@ my sub fatal_error( $msg ) {
     };
 
 
-my sub full_setting( $s ) {
+my sub full_setting( $s , $d ) {
 # Check parameter values and provide a full setting.
 
-    return {$default->%*} if not $s->%*;
+    return {$d->%*} if not $s->%*;
 
     if (not exists $s->{create}) {
-        $s->{create} = $default->{create};
+        $s->{create} = $d->{create};
         };
 
     if (exists $s->{error}) {
         if (defined $s->{error}) {
             return errh('"error" not a ref to a subroutine.')
-              if ref $s->{error} ne 'CODE';
+              if reftype $s->{error} ne 'CODE';
             };
         }
     else {
-        $s->{error} = $default->{error};
+        $s->{error} = $d->{error};
+        };
+
+    if (not exists $s->{flatten}) {
+        $s->{flatten} = $d->{flatten};
         };
 
     if (not exists $s->{exclusive}) {
-        $s->{exclusive} = $default->{exclusive};
+        $s->{exclusive} = $d->{exclusive};
         };
 
     if (not exists $s->{newline}) {
-        $s->{newline} = $default->{newline};
+        $s->{newline} = $d->{newline};
         };
 
     if (exists $s->{patience}) {
@@ -141,7 +147,7 @@ my sub full_setting( $s ) {
           if $s->{patience} < 0;
         }
     else {
-        $s->{patience} = $default->{patience};
+        $s->{patience} = $d->{patience};
         };
 
     if (exists $s->{separator}) {
@@ -149,7 +155,11 @@ my sub full_setting( $s ) {
           if defined $s->{separator} and $s->{separator} eq '';
         }
     else {
-        $s->{separator} = $default->{separator};
+        $s->{separator} = $d->{separator};
+        };
+
+    if (7 < keys $s->%*) {
+        return errh('Invalid configuration parameter.');
         };
 
     return $s;
@@ -160,7 +170,7 @@ my sub full_setting( $s ) {
 
 sub import( @implist ) {
     my $mynsp = shift @implist;
-    my $clnsp = caller;
+    my $nsp = caller;
     my %check;
 
     if (@implist) {
@@ -181,9 +191,12 @@ sub import( @implist ) {
             $i++;
             };
 
-        my $s = full_setting($cpar)
+        my $s = full_setting($cpar,$default->{'File::Takeput'})
           or fatal_error('Takeput: '.$errh_msg);
-        $default = $s;
+        $default->{$nsp} = $s;
+        }
+    else {
+        $default->{$nsp} = {$default->{'File::Takeput'}->%*};
         };
 
     my sub amp( $s ) {
@@ -196,10 +209,10 @@ sub import( @implist ) {
     while ($_ = amp shift @implist) {
         fatal_error('Takeput: "'.$_.'" not exported.') if not $check{$_};
         no strict "refs";
-        if    ( m/^\$(.*)$/ ) { *{"${clnsp}::$1"} = \$$1; }
-        elsif ( m/^\@(.*)$/ ) { *{"${clnsp}::$1"} = \@$1; }
-        elsif ( m/^\%(.*)$/ ) { *{"${clnsp}::$1"} = \%$1; }
-        elsif ( m/^\&(.*)$/ ) { *{"${clnsp}::$1"} = \&$1; };
+        if    ( m/^\$(.*)$/ ) { *{"${nsp}::$1"} = \$$1; }
+        elsif ( m/^\@(.*)$/ ) { *{"${nsp}::$1"} = \@$1; }
+        elsif ( m/^\%(.*)$/ ) { *{"${nsp}::$1"} = \%$1; }
+        elsif ( m/^\&(.*)$/ ) { *{"${nsp}::$1"} = \&$1; };
         use strict "refs";
         };
 
@@ -260,7 +273,10 @@ my sub read_file( $fh , $s ) {
         local $/ = $s->{separator};
         $data->@* = readline($fh);
         };
-    return [''] if scalar $data->@* == 0;
+    if (scalar $data->@* == 0) {
+        return '' if $s->{flatten};
+        return [''];
+        };
 
     if (defined $s->{newline} and defined $s->{separator}) {
         my $e0 = $s->{separator};
@@ -272,6 +288,8 @@ my sub read_file( $fh , $s ) {
         substr($data->[-1],-$e0n) = $e1
           if substr($data->[-1],-$e0n) eq $e0;
         };
+
+    $data = join '' , $data->@* if $s->{flatten};
 
     return $data;
     };
@@ -296,17 +314,60 @@ my sub print_file( $fh , $s , $data ) {
         };
     1;};
 
+# - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - #
+
+my sub pgrab( $cname , $s , $lflag ) {
+# Private part of grab.
+
+    open_file $cname , O_RDONLY , $lflag , $s->{patience}
+      or return errh('grab: ',$s);
+    seek $imfh{$cname} , 0 , 0;
+    my $data = read_file($imfh{$cname} , $s);
+    close_file($cname)
+      or return errh('grab: ',$s);
+
+    return $data if ref $data eq '';
+    return $data->@*;
+    };
+
+
+my sub ppass( $cname , $s ) {
+# Private part of pass.
+
+    return errh('pass: "'.$cname.'" not taken.',$s)
+      if not exists $imfh{$cname};
+    return errh('pass: "'.$cname.'" not opened.',$s)
+      if not defined fileno($imfh{$cname});
+
+    close_file($cname)
+      or return errh('pass: ',$s);
+    1;};
+
+
+my sub ptake( $cname , $s , $oflag ) {
+# Private part of take.
+
+    open_file $cname , O_RDWR|$oflag , LOCK_EX , $s->{patience}
+      or return errh('take: ',$s);
+    seek $imfh{$cname} , 0 , 0;
+    my $data = read_file($imfh{$cname} , $s);
+
+    return $data if ref $data eq '';
+    return $data->@*;
+    };
+
 # ------------------------------------------------------------------------- #
 # Exportable subroutines.
 
 sub append( $fname , %set ) {
 # Append @data to $fname.
 
-    my $s = full_setting(\%set)
-      or return adverrh('append: ',$default);
+    my $nsp = caller;
+    my $s = full_setting(\%set,$default->{$nsp})
+      or return errah('append: ',$default->{$nsp});
     my $oflag = $s->{create} ? O_CREAT : 0;
     my $cname = canonical $fname
-      or return adverrh('append: No such file "'.$fname.'" possible.',$s);
+      or return errah('append: No such file "'.$fname.'" possible.',$s);
 
     return sub( @data ) {
         return errh('append: "'.$cname.'" does not exist.',$s)
@@ -323,24 +384,40 @@ sub append( $fname , %set ) {
 
 sub grab( $fname , %set ) {
 # Read content of $fname.
-    return fgrab($fname,%set)->();
+
+    my $nsp = caller;
+    my $s = full_setting(\%set,$default->{$nsp})
+      or return errah('grab: ',$default->{$nsp});
+    my $lflag = $s->{exclusive} ? LOCK_EX : LOCK_SH;
+    my $cname = canonical $fname
+      or return errah('grab: No such file "'.$fname.'" possible.',$s);
+
+    return pgrab($cname,$s,$lflag);
     };
 
 
 sub pass( $fname , %set ) {
 # Close filehandle for $fname without changing its content.
-    return fpass($fname,%set)->();
-    };
+
+    my $nsp = caller;
+    my $s = full_setting(\%set,$default->{$nsp})
+      or return errah('pass: ',$default->{$nsp});
+    my $cname = canonical $fname
+      or return errah('pass: No such file "'.$fname.'" possible.',$s);
+
+    return ppass($cname,$s);
+    1;};
 
 
 sub plunk( $fname , %set ) {
 # Write @data to $fname.
 
-    my $s = full_setting(\%set)
-      or return adverrh('plunk: ',$default);
+    my $nsp = caller;
+    my $s = full_setting(\%set,$default->{$nsp})
+      or return errah('plunk: ',$default->{$nsp});
     my $oflag = $s->{create} ? O_CREAT : 0;
     my $cname = canonical $fname
-      or return adverrh('plunk: No such file "'.$fname.'" possible.',$s);
+      or return errah('plunk: No such file "'.$fname.'" possible.',$s);
 
     return sub( @data ) {
         return errh('plunk: "'.$cname.'" does not exist.',$s)
@@ -359,10 +436,11 @@ sub plunk( $fname , %set ) {
 sub put( $fname , %set ) {
 # Write content to $fname and close filehandle.
 
-    my $s = full_setting(\%set)
-      or return adverrh('put: ',$default);
+    my $nsp = caller;
+    my $s = full_setting(\%set,$default->{$nsp})
+      or return errah('put: ',$default->{$nsp});
     my $cname = canonical $fname
-      or return adverrh('put: No such file "'.$fname.'" possible.',$s);
+      or return errah('put: No such file "'.$fname.'" possible.',$s);
 
     return sub( @data ) {
         return errh('put: "'.$cname.'" does not exist.',$s)
@@ -382,50 +460,49 @@ sub put( $fname , %set ) {
 
 sub take( $fname , %set ) {
 # Read content of $fname and keep filehandle open.
-    return ftake($fname,%set)->();
-    }; # sub take
+
+    my $nsp = caller;
+    my $s = full_setting(\%set,$default->{$nsp})
+      or return errah('ftake: ',$default->{$nsp});
+    my $oflag = $s->{create} ? O_CREAT : 0;
+    my $cname = canonical $fname
+      or return errah('ftake: No such file "'.$fname.'" possible.',$s);
+
+    return errh('take: "'.$fname.'" does not exist.',$s)
+      if (not $s->{create}) and (not -f $cname);
+
+    return ptake($cname,$s,$oflag);
+    };
 
 # - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - #
 
 sub fgrab( $fname , %set ) {
-# Read content of $fname.
+# Functional version of grab.
 
-    my $s = full_setting(\%set)
-      or return adverrh('grab: ',$default);
+    my $nsp = caller;
+    my $s = full_setting(\%set,$default->{$nsp})
+      or return errah('grab: ',$default->{$nsp});
     my $lflag = $s->{exclusive} ? LOCK_EX : LOCK_SH;
     my $cname = canonical $fname
-      or return adverrh('grab: No such file "'.$fname.'" possible.',$s);
+      or return errah('grab: No such file "'.$fname.'" possible.',$s);
 
     return sub {
-        open_file $cname , O_RDONLY , $lflag , $s->{patience}
-          or return errh('grab: ',$s);
-    
-        seek $imfh{$cname} , 0 , 0;
-        my $data = read_file($imfh{$cname} , $s);
-        close_file($cname)
-          or return errh('grab: ',$s);
-    
-        return $data->@*;
+        return pgrab($cname,$s,$lflag);
         };
     };
 
 
 sub fpass( $fname , %set ) {
-# Close filehandle for $fname without changing its content.
+# Functional version of pass.
 
-    my $s = full_setting(\%set)
-      or return adverrh('pass: ',$default);
+    my $nsp = caller;
+    my $s = full_setting(\%set,$default->{$nsp})
+      or return errah('pass: ',$default->{$nsp});
     my $cname = canonical $fname
-      or return adverrh('pass: No such file "'.$fname.'" possible.',$s);
+      or return errah('pass: No such file "'.$fname.'" possible.',$s);
 
     return sub {
-        return errh('pass: "'.$fname.'" not taken.',$s)
-          if not exists $imfh{$cname};
-        return errh('pass: "'.$fname.'" not opened.',$s)
-          if not defined fileno($imfh{$cname});
-    
-        close_file($cname)
-          or return errh('pass: ',$s);
+        return ppass($cname,$s);
         };
     1;};
 
@@ -433,21 +510,15 @@ sub fpass( $fname , %set ) {
 sub ftake( $fname , %set ) {
 # Functional version of take.
 
-    my $s = full_setting(\%set)
-      or return adverrh('ftake: ',$default);
+    my $nsp = caller;
+    my $s = full_setting(\%set,$default->{$nsp})
+      or return errah('ftake: ',$default->{$nsp});
     my $oflag = $s->{create} ? O_CREAT : 0;
     my $cname = canonical $fname
-      or return adverrh('ftake: No such file "'.$fname.'" possible.',$s);
+      or return errah('ftake: No such file "'.$fname.'" possible.',$s);
 
     return sub {
-        return errh('take: "'.$fname.'" does not exist.',$s)
-          if (not $s->{create}) and (not -f $cname);
-        open_file $cname , O_RDWR|$oflag , LOCK_EX , $s->{patience}
-          or return errh('take: ',$s);
-    
-        seek $imfh{$cname} , 0 , 0;
-        my $data = read_file($imfh{$cname} , $s);
-        return $data->@*;
+        return take($cname,$s->%*);
         };
     };
 
@@ -455,17 +526,19 @@ sub ftake( $fname , %set ) {
 sub reset() {
 # Change default settings to the original defaults.
 
-    $default = {$urdefault->%*};
+    my $nsp = caller;
+    $default->{$nsp} = {$default->{'File::Takeput'}->%*};
     1;};
 
 
 sub set( %set ) {
 # Change default settings.
 
-    my $s = full_setting(\%set)
-      or return adverrh('set: ',$default);
+    my $nsp = caller;
+    my $s = full_setting(\%set,$default->{$nsp})
+      or return errah('set: ',$default->{$nsp});
 
-    $default = $s;
+    $default->{$nsp} = $s;
     1;};
 
 # ------------------------------------------------------------------------- #
@@ -480,7 +553,7 @@ File::Takeput - Slurp style file IO with locking.
 
 =head1 VERSION
 
-0.11
+0.20
 
 =head1 SYNOPSIS
 
@@ -516,12 +589,6 @@ Encoding is often part of file IO operations, but Takeput keeps out of that. It 
     use Encode;
 
     my @article = map {decode('iso-8859-1',$_)} grab 'article.latin-1';
-
-=head2 ERROR HANDLING
-
-Takeput will die on compile-time errors, but not on runtime errors. In case of a runtime error it might issue a warning. But it will always write an error message in $@ and return an error value.
-
-That said, you are able to change how runtime errors are handled, by using the L<"error" configuration parameter|/error>.
 
 =head1 SUBROUTINES AND VARIABLES
 
@@ -601,13 +668,13 @@ Sets the default configuration parameters back to the Takeput defaults.
 
 =item set( %settings )
 
-Changes the default values to be %settings. Can be reset by calling "reset".
+Customize the default values by setting parameters as in %settings. Can be reset by calling "reset".
 
 =back
 
 =head1 CONFIGURATION
 
-There are six configuration parameters.
+There are seven configuration parameters.
 
 =over
 
@@ -639,6 +706,17 @@ If the value of "error" is undef, Takeput will not make these calls.
 =item exclusive
 
 A scalar. If true Takeput will take an exclusive lock on read operations. If false it will just take a shared lock on them, as it normally does.
+
+=item flatten
+
+A scalar. If true Takeput will flatten the file content and return it as a string. If false it will return an array.
+
+Normally you would also set "separator" to undef, when you set "flatten" to true. For example:
+
+    use YAML::XS qw(Load Dump);                            # Working with YAML.
+
+    File::Takeput::set(separator => undef , flatten => 1); # Because of this...
+    my $fancy_data = Load grab('my_file.yaml');            # ...this will work.
 
 =item newline
 
@@ -688,17 +766,21 @@ All the file operation subroutines can take the configuration parameters as opti
 
 =head3 2. SET AND RESET SUBROUTINES
 
-The two subroutines "set" and "reset" is one way to set the default values for the configuration parameters. You use "set" to set custom values, and "reset" to set the values back to the Takeput defaults.
+The two subroutines "set" and "reset" will customize the default values of the configuration parameters, so that subsequent file operations are using those defaults.
 
-Think of it as assignment statements. If there are multiple calls, the last one is the one that is in effect.
+You use "set" to set the values, and "reset" to set the values back to the Takeput defaults. Think of it as assignment statements. If there are multiple calls, the last one is the one that is in effect.
+
+Customized defaults are limited to the namespace in which you set them.
 
 =head3 3. USE STATEMENT
 
-Another way to set the default values is in the use statement that imports Takeput. For example:
+Another way to customize the default values is in the use statement that imports Takeput. For example:
 
     use File::Takeput separator => "\n";
 
-When you do it like this, the values are set at compile-time. Because of that, Takeput will die on any errors that these settings will give.
+When you do it like this, the values are set at compile-time. Because of that, Takeput will die on any errors that those settings will give rise to.
+
+Note that customized defaults are limited to the namespace in which you set them.
 
 =head3 4. DEFAULT CONFIGURATION
 
@@ -710,19 +792,31 @@ C<error>: undef
 
 C<exclusive>: undef (false)
 
+C<flatten>: undef (false)
+
 C<newline>: undef
 
 C<patience>: 0
 
 C<separator>: $/ (at compile time)
 
+=head1 ERROR HANDLING
+
+Takeput will die on compile-time errors, but not on runtime errors. In case of a runtime error it might or might not issue a warning. But it will always write an error message in $@ and return an error value.
+
+That said, you have the option of changing how runtime errors are handled, by using the L<"error" configuration parameter|/error>.
+
 =head1 DEPENDENCIES
 
 Cwd
 
+Exporter
+
 Fcntl
 
 File::Basename
+
+Scalar::Util
 
 Time::HiRes
 

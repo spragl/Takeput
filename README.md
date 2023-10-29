@@ -4,7 +4,7 @@ File::Takeput - Slurp style file IO with locking.
 
 # VERSION
 
-0.11
+0.20
 
 # SYNOPSIS
 
@@ -40,12 +40,6 @@ Encoding is often part of file IO operations, but Takeput keeps out of that. It 
     use Encode;
 
     my @article = map {decode('iso-8859-1',$_)} grab 'article.latin-1';
-
-## ERROR HANDLING
-
-Takeput will die on compile-time errors, but not on runtime errors. In case of a runtime error it might issue a warning. But it will always write an error message in $@ and return an error value.
-
-That said, you are able to change how runtime errors are handled, by using the ["error" configuration parameter](#error).
 
 # SUBROUTINES AND VARIABLES
 
@@ -123,11 +117,11 @@ Imported on demand:
 
 - set( %settings )
 
-    Changes the default values to be %settings. Can be reset by calling "reset".
+    Customize the default values by setting parameters as in %settings. Can be reset by calling "reset".
 
 # CONFIGURATION
 
-There are six configuration parameters.
+There are seven configuration parameters.
 
 - create
 
@@ -157,6 +151,17 @@ There are six configuration parameters.
 - exclusive
 
     A scalar. If true Takeput will take an exclusive lock on read operations. If false it will just take a shared lock on them, as it normally does.
+
+- flatten
+
+    A scalar. If true Takeput will flatten the file content and return it as a string. If false it will return an array.
+
+    Normally you would also set "separator" to undef, when you set "flatten" to true. For example:
+
+        use YAML::XS qw(Load Dump);                            # Working with YAML.
+
+        File::Takeput::set(separator => undef , flatten => 1); # Because of this...
+        my $fancy_data = Load grab('my_file.yaml');            # ...this will work.
 
 - newline
 
@@ -197,17 +202,21 @@ All the file operation subroutines can take the configuration parameters as opti
 
 ### 2. SET AND RESET SUBROUTINES
 
-The two subroutines "set" and "reset" is one way to set the default values for the configuration parameters. You use "set" to set custom values, and "reset" to set the values back to the Takeput defaults.
+The two subroutines "set" and "reset" will customize the default values of the configuration parameters, so that subsequent file operations are using those defaults.
 
-Think of it as assignment statements. If there are multiple calls, the last one is the one that is in effect.
+You use "set" to set the values, and "reset" to set the values back to the Takeput defaults. Think of it as assignment statements. If there are multiple calls, the last one is the one that is in effect.
+
+Customized defaults are limited to the namespace in which you set them.
 
 ### 3. USE STATEMENT
 
-Another way to set the default values is in the use statement that imports Takeput. For example:
+Another way to customize the default values is in the use statement that imports Takeput. For example:
 
     use File::Takeput separator => "\n";
 
-When you do it like this, the values are set at compile-time. Because of that, Takeput will die on any errors that these settings will give.
+When you do it like this, the values are set at compile-time. Because of that, Takeput will die on any errors that those settings will give rise to.
+
+Note that customized defaults are limited to the namespace in which you set them.
 
 ### 4. DEFAULT CONFIGURATION
 
@@ -219,19 +228,31 @@ The Takeput defaults are:
 
 `exclusive`: undef (false)
 
+`flatten`: undef (false)
+
 `newline`: undef
 
 `patience`: 0
 
 `separator`: $/ (at compile time)
 
+# ERROR HANDLING
+
+Takeput will die on compile-time errors, but not on runtime errors. In case of a runtime error it might or might not issue a warning. But it will always write an error message in $@ and return an error value.
+
+That said, you have the option of changing how runtime errors are handled, by using the ["error" configuration parameter](#error).
+
 # DEPENDENCIES
 
 Cwd
 
+Exporter
+
 Fcntl
 
 File::Basename
+
+Scalar::Util
 
 Time::HiRes
 

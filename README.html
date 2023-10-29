@@ -15,11 +15,7 @@
   <li><a href="#NAME">NAME</a></li>
   <li><a href="#VERSION">VERSION</a></li>
   <li><a href="#SYNOPSIS">SYNOPSIS</a></li>
-  <li><a href="#DESCRIPTION">DESCRIPTION</a>
-    <ul>
-      <li><a href="#ERROR-HANDLING">ERROR HANDLING</a></li>
-    </ul>
-  </li>
+  <li><a href="#DESCRIPTION">DESCRIPTION</a></li>
   <li><a href="#SUBROUTINES-AND-VARIABLES">SUBROUTINES AND VARIABLES</a></li>
   <li><a href="#CONFIGURATION">CONFIGURATION</a>
     <ul>
@@ -33,6 +29,7 @@
       </li>
     </ul>
   </li>
+  <li><a href="#ERROR-HANDLING">ERROR HANDLING</a></li>
   <li><a href="#DEPENDENCIES">DEPENDENCIES</a></li>
   <li><a href="#KNOWN-ISSUES">KNOWN ISSUES</a></li>
   <li><a href="#TODO">TODO</a></li>
@@ -46,7 +43,7 @@
 
 <h1 id="VERSION">VERSION</h1>
 
-<p>0.11</p>
+<p>0.20</p>
 
 <h1 id="SYNOPSIS">SYNOPSIS</h1>
 
@@ -82,12 +79,6 @@
     use Encode;
 
     my @article = map {decode(&#39;iso-8859-1&#39;,$_)} grab &#39;article.latin-1&#39;;</code></pre>
-
-<h2 id="ERROR-HANDLING">ERROR HANDLING</h2>
-
-<p>Takeput will die on compile-time errors, but not on runtime errors. In case of a runtime error it might issue a warning. But it will always write an error message in $@ and return an error value.</p>
-
-<p>That said, you are able to change how runtime errors are handled, by using the <a href="#error">&quot;error&quot; configuration parameter</a>.</p>
 
 <h1 id="SUBROUTINES-AND-VARIABLES">SUBROUTINES AND VARIABLES</h1>
 
@@ -177,14 +168,14 @@
 <dt id="set-settings">set( %settings )</dt>
 <dd>
 
-<p>Changes the default values to be %settings. Can be reset by calling &quot;reset&quot;.</p>
+<p>Customize the default values by setting parameters as in %settings. Can be reset by calling &quot;reset&quot;.</p>
 
 </dd>
 </dl>
 
 <h1 id="CONFIGURATION">CONFIGURATION</h1>
 
-<p>There are six configuration parameters.</p>
+<p>There are seven configuration parameters.</p>
 
 <dl>
 
@@ -221,6 +212,19 @@
 <dd>
 
 <p>A scalar. If true Takeput will take an exclusive lock on read operations. If false it will just take a shared lock on them, as it normally does.</p>
+
+</dd>
+<dt id="flatten">flatten</dt>
+<dd>
+
+<p>A scalar. If true Takeput will flatten the file content and return it as a string. If false it will return an array.</p>
+
+<p>Normally you would also set &quot;separator&quot; to undef, when you set &quot;flatten&quot; to true. For example:</p>
+
+<pre><code>    use YAML::XS qw(Load Dump);                            # Working with YAML.
+
+    File::Takeput::set(separator =&gt; undef , flatten =&gt; 1); # Because of this...
+    my $fancy_data = Load grab(&#39;my_file.yaml&#39;);            # ...this will work.</code></pre>
 
 </dd>
 <dt id="newline">newline</dt>
@@ -285,17 +289,21 @@
 
 <h3 id="SET-AND-RESET-SUBROUTINES">2. SET AND RESET SUBROUTINES</h3>
 
-<p>The two subroutines &quot;set&quot; and &quot;reset&quot; is one way to set the default values for the configuration parameters. You use &quot;set&quot; to set custom values, and &quot;reset&quot; to set the values back to the Takeput defaults.</p>
+<p>The two subroutines &quot;set&quot; and &quot;reset&quot; will customize the default values of the configuration parameters, so that subsequent file operations are using those defaults.</p>
 
-<p>Think of it as assignment statements. If there are multiple calls, the last one is the one that is in effect.</p>
+<p>You use &quot;set&quot; to set the values, and &quot;reset&quot; to set the values back to the Takeput defaults. Think of it as assignment statements. If there are multiple calls, the last one is the one that is in effect.</p>
+
+<p>Customized defaults are limited to the namespace in which you set them.</p>
 
 <h3 id="USE-STATEMENT">3. USE STATEMENT</h3>
 
-<p>Another way to set the default values is in the use statement that imports Takeput. For example:</p>
+<p>Another way to customize the default values is in the use statement that imports Takeput. For example:</p>
 
 <pre><code>    use File::Takeput separator =&gt; &quot;\n&quot;;</code></pre>
 
-<p>When you do it like this, the values are set at compile-time. Because of that, Takeput will die on any errors that these settings will give.</p>
+<p>When you do it like this, the values are set at compile-time. Because of that, Takeput will die on any errors that those settings will give rise to.</p>
+
+<p>Note that customized defaults are limited to the namespace in which you set them.</p>
 
 <h3 id="DEFAULT-CONFIGURATION">4. DEFAULT CONFIGURATION</h3>
 
@@ -307,19 +315,31 @@
 
 <p><code>exclusive</code>: undef (false)</p>
 
+<p><code>flatten</code>: undef (false)</p>
+
 <p><code>newline</code>: undef</p>
 
 <p><code>patience</code>: 0</p>
 
 <p><code>separator</code>: $/ (at compile time)</p>
 
+<h1 id="ERROR-HANDLING">ERROR HANDLING</h1>
+
+<p>Takeput will die on compile-time errors, but not on runtime errors. In case of a runtime error it might or might not issue a warning. But it will always write an error message in $@ and return an error value.</p>
+
+<p>That said, you have the option of changing how runtime errors are handled, by using the <a href="#error">&quot;error&quot; configuration parameter</a>.</p>
+
 <h1 id="DEPENDENCIES">DEPENDENCIES</h1>
 
 <p>Cwd</p>
 
+<p>Exporter</p>
+
 <p>Fcntl</p>
 
 <p>File::Basename</p>
+
+<p>Scalar::Util</p>
 
 <p>Time::HiRes</p>
 

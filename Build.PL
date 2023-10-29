@@ -13,14 +13,17 @@ Module::Build->new(
     create_readme       => 0 ,
     requires            => {
         'Cwd'             => 0 ,
+        'Exporter'        => 0 ,
         'Fcntl'           => 0 ,
         'File::Basename'  => 0 ,
+        'Scalar::Util'    => 0 ,
         'Time::HiRes'     => 0 ,
         } ,
     test_requires       => {
         'Cwd'             => 0 ,
         'File::Basename'  => 0 ,
         'File::Copy'      => 0 ,
+        'File::Spec'      => 0 ,
         'Test::More'      => 0 ,
         } ,
     meta_merge => {

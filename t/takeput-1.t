@@ -47,11 +47,13 @@ ok (append($fn_2)->("3,kolme\n")); # 8
 my $content3;
 ok (($content3) = grab($fn_3 , separator => undef)); # 9
 ok ("1,yksi\n2,kaksi\n" eq $content3); # 10
+ok ($content3 = grab($fn_3 , separator => undef , flatten => 1)); # 11
+ok ("1,yksi\n2,kaksi\n" eq $content3); # 12
 
 $content1[$_] =~ s/,/;/g for (0..$#content1);
-ok (put($fn_1)->(@content1)); # 11
+ok (put($fn_1)->(@content1)); # 13
 
-ok ("1;yksi\n2;kaksi\n"          eq join '' , grab($fn_1)); # 12
-ok ("1,yksi\n2,kaksi\n3,kolme\n" eq join '' , grab($fn_2)); # 13
+ok ("1;yksi\n2;kaksi\n"          eq join '' , grab($fn_1)); # 14
+ok ("1,yksi\n2,kaksi\n3,kolme\n" eq join '' , grab($fn_2)); # 15
 
 __END__

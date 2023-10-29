@@ -22,5 +22,7 @@ t/takeput-4.t
 t/takeput-4.txt
 t/takeput-5.t
 t/takeput-5.txt
+t/takeput-6.t
+t/takeput-6.txt
 META.yml
 META.json

@@ -22,8 +22,10 @@
       "runtime" : {
          "requires" : {
             "Cwd" : "0",
+            "Exporter" : "0",
             "Fcntl" : "0",
             "File::Basename" : "0",
+            "Scalar::Util" : "0",
             "Time::HiRes" : "0"
          }
       },
@@ -32,6 +34,7 @@
             "Cwd" : "0",
             "File::Basename" : "0",
             "File::Copy" : "0",
+            "File::Spec" : "0",
             "Test::More" : "0"
          }
       }
@@ -39,7 +42,7 @@
    "provides" : {
       "File::Takeput" : {
          "file" : "lib/File/Takeput.pm",
-         "version" : "0.11"
+         "version" : "0.2"
       },
       "File::Takeput::Unix" : {
          "file" : "lib/File/Takeput/Unix.pm"
@@ -60,6 +63,6 @@
          "url" : "https://github.com/spragl/Takeput"
       }
    },
-   "version" : "0.11",
+   "version" : "0.2",
    "x_serialization_backend" : "JSON::PP version 4.02"
 }
