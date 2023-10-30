@@ -4,7 +4,7 @@ File::Takeput - Slurp style file IO with locking.
 
 # VERSION
 
-0.20
+0.21
 
 # SYNOPSIS
 

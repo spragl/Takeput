@@ -1,4 +1,5 @@
 Build.PL
+Changes
 INSTALL.txt
 lib/File/Takeput.pm
 lib/File/Takeput/Unix.pm

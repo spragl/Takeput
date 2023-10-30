@@ -10,7 +10,7 @@ use strict;
 use experimental qw(signatures);
 # use Exporter qw(import);
 
-our $VERSION = 0.20;
+our $VERSION = 0.21;
 
 use Scalar::Util qw(reftype); # Later builtin::reftype
 use Fcntl qw(O_CREAT O_RDONLY O_RDWR O_WRONLY :flock);
@@ -175,7 +175,7 @@ sub import( @implist ) {
 
     if (@implist) {
         %check = map {$_ => 1}
-          qw(create error exclusive newline patience separator);
+          qw(create error exclusive flatten newline patience separator);
 
         my $cpar = {};
         my $i = 0;
@@ -553,7 +553,7 @@ File::Takeput - Slurp style file IO with locking.
 
 =head1 VERSION
 
-0.20
+0.21
 
 =head1 SYNOPSIS
 
