@@ -20,7 +20,7 @@ name: File-Takeput
 provides:
   File::Takeput:
     file: lib/File/Takeput.pm
-    version: '0.21'
+    version: '0.3'
   File::Takeput::Unix:
     file: lib/File/Takeput/Unix.pm
   File::Takeput::Win32:
@@ -36,5 +36,5 @@ resources:
   bugtracker: https://github.com/spragl/Takeput/issues
   license: http://apache.org/licenses/LICENSE-2.0
   repository: https://github.com/spragl/Takeput
-version: '0.21'
+version: '0.3'
 x_serialization_backend: 'CPAN::Meta::YAML version 0.018'

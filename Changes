@@ -1,5 +1,8 @@
 File::Takeput changelog
 
+0.30 2023-10-31
+- Unique configuration.
+
 0.21 2023-10-30
 - Fixed flatten import bug.
 

@@ -10,10 +10,10 @@ use strict;
 use experimental qw(signatures);
 # use Exporter qw(import);
 
-our $VERSION = 0.21;
+our $VERSION = 0.30;
 
 use Scalar::Util qw(reftype); # Later builtin::reftype
-use Fcntl qw(O_CREAT O_RDONLY O_RDWR O_WRONLY :flock);
+use Fcntl qw(O_CREAT O_RDONLY O_RDWR O_WRONLY O_EXCL :flock);
 use File::Basename qw(basename dirname);
 use Cwd qw(abs_path);
 use if $^O eq 'MSWin32' , 'File::Takeput::Win32';
@@ -43,13 +43,14 @@ our @EXPORT_OK = qwac '
 
 my $default = {
     'File::Takeput' => {
-        create => undef ,
-        error => undef ,
-        flatten => undef ,
+        create    => undef ,
+        error     => undef ,
+        flatten   => undef ,
         exclusive => undef ,
-        newline => undef ,
-        patience => 0 ,
+        newline   => undef ,
+        patience  => 0 ,
         separator => $/ ,
+        unique    => undef ,
         } ,
     };
 
@@ -158,7 +159,11 @@ my sub full_setting( $s , $d ) {
         $s->{separator} = $d->{separator};
         };
 
-    if (7 < keys $s->%*) {
+    if (not exists $s->{unique}) {
+        $s->{unique} = $d->{unique};
+        };
+
+    if (8 < keys $s->%*) {
         return errh('Invalid configuration parameter.');
         };
 
@@ -174,8 +179,9 @@ sub import( @implist ) {
     my %check;
 
     if (@implist) {
-        %check = map {$_ => 1}
-          qw(create error exclusive flatten newline patience separator);
+        %check = map {$_ => 1} qw(
+            create error exclusive flatten newline patience separator unique
+            );
 
         my $cpar = {};
         my $i = 0;
@@ -242,6 +248,9 @@ my sub open_file( $cname , $oflag , $lflag , $p ) {
       if (exists $imfh{$cname});
 
     sysopen $imfh{$cname} , $cname , $oflag;
+
+    $p = 0 if ($oflag&O_EXCL);
+
     if ( flock_take $imfh{$cname} , $lflag , $p ) {
         return 1;
         }
@@ -365,7 +374,10 @@ sub append( $fname , %set ) {
     my $nsp = caller;
     my $s = full_setting(\%set,$default->{$nsp})
       or return errah('append: ',$default->{$nsp});
-    my $oflag = $s->{create} ? O_CREAT : 0;
+
+    my $oflag = ($s->{unique}) ? (O_CREAT|O_EXCL) :
+                ($s->{create}) ? O_CREAT : 0;
+
     my $cname = canonical $fname
       or return errah('append: No such file "'.$fname.'" possible.',$s);
 
@@ -415,7 +427,10 @@ sub plunk( $fname , %set ) {
     my $nsp = caller;
     my $s = full_setting(\%set,$default->{$nsp})
       or return errah('plunk: ',$default->{$nsp});
-    my $oflag = $s->{create} ? O_CREAT : 0;
+
+    my $oflag = ($s->{unique}) ? (O_CREAT|O_EXCL) :
+                ($s->{create}) ? O_CREAT : 0;
+
     my $cname = canonical $fname
       or return errah('plunk: No such file "'.$fname.'" possible.',$s);
 
@@ -464,7 +479,10 @@ sub take( $fname , %set ) {
     my $nsp = caller;
     my $s = full_setting(\%set,$default->{$nsp})
       or return errah('ftake: ',$default->{$nsp});
-    my $oflag = $s->{create} ? O_CREAT : 0;
+
+    my $oflag = ($s->{unique}) ? (O_CREAT|O_EXCL) :
+                ($s->{create}) ? O_CREAT : 0;
+
     my $cname = canonical $fname
       or return errah('ftake: No such file "'.$fname.'" possible.',$s);
 
@@ -513,7 +531,10 @@ sub ftake( $fname , %set ) {
     my $nsp = caller;
     my $s = full_setting(\%set,$default->{$nsp})
       or return errah('ftake: ',$default->{$nsp});
-    my $oflag = $s->{create} ? O_CREAT : 0;
+
+    my $oflag = ($s->{unique}) ? (O_CREAT|O_EXCL) :
+                ($s->{create}) ? O_CREAT : 0;
+
     my $cname = canonical $fname
       or return errah('ftake: No such file "'.$fname.'" possible.',$s);
 
@@ -553,7 +574,7 @@ File::Takeput - Slurp style file IO with locking.
 
 =head1 VERSION
 
-0.21
+0.30
 
 =head1 SYNOPSIS
 
@@ -579,9 +600,11 @@ File::Takeput - Slurp style file IO with locking.
 
 =head1 DESCRIPTION
 
-Slurp style file IO with locking. The purpose of Takeput is to make it pleasant for you to script file IO. Slurp style is both user friendly and very effective, if you can have your files in memory.
+Slurp style file IO with locking. The purpose of Takeput is to make it pleasant for you to script file IO. Slurp style is both user friendly and very effective if you can have your files in memory.
 
-The other major point of Takeput is locking. Takeput is careful to help your script be a good citizen in a busy filesystem. All its file operations respect and set flock locking. If your script misses a lock and does not release it, the lock will be released when your script terminates.
+The other major point of Takeput is locking. Takeput is careful to help your script be a good citizen in a busy filesystem. All its file operations respect and set flock locking.
+
+If your script misses a lock and does not release it, the lock will be released when your script terminates.
 
 Encoding is often part of file IO operations, but Takeput keeps out of that. It reads and writes file content just as strings of bytes, in a sort of line-based binmode. Use some other module if you need decoding and encoding. For example:
 
@@ -621,7 +644,11 @@ Reading an empty file will return a list with one element, the empty string. If 
 
 =item pass( $filename )
 
-Releases the lock on the $filename file. The content of the file will be the same as when the lock was taken (if everyone respects the locking). This is useful when a lock was taken with the "take" subroutine, but it later turned out that there was nothing to write to the file.
+Releases the lock on the $filename file.
+
+The content of the file will normally be the same as when the lock was taken with the "take" subroutine. This is useful when a lock was taken, but it later turned out that there was nothing to write to the file.
+
+There are two caveats. If the "create" configuration parameter is true, the file might have been created when it was taken, so it has been changed in that sense. And of course flock locks are only advisory, so other processes can ignore the locks and change the file while it is taken.
 
 =item plunk( $filename )->( @data )
 
@@ -635,9 +662,11 @@ Setting the L<"create" configuration parameter|/create> on this call will not wo
 
 =item take( $filename )
 
-Sets a lock on the $filename file, reads and returns its content. A call to "take" should later on be followed by a call to "put" or "pass".
+Sets a lock on the $filename file, reads and returns its content.
 
-Reading an empty file will return a list with one element, the empty string. If a false value is returned instead, it is because "take" could not read the file.
+The "take" call has write intention, because it is the first part of an operation. The second part is a call A call to "put" or "pass".
+
+Opening an empty file will return a list with one element, the empty string. If a false value is returned instead, it is because "take" could not read the file.
 
 =item fgrab( $filename )
 
@@ -674,7 +703,7 @@ Customize the default values by setting parameters as in %settings. Can be reset
 
 =head1 CONFIGURATION
 
-There are seven configuration parameters.
+There are eight configuration parameters.
 
 =over
 
@@ -718,6 +747,8 @@ Normally you would also set "separator" to undef, when you set "flatten" to true
     File::Takeput::set(separator => undef , flatten => 1); # Because of this...
     my $fancy_data = Load grab('my_file.yaml');            # ...this will work.
 
+Note that with "flatten" set to true, reading an empty file returns the empty string, which counts as false. Failing to read a file returns undef. So test for definedness to not be tricked by this.
+
 =item newline
 
 A string that replaces the "separator" string at the end of each line when reading from a file. When writing to a file the replacement is the other way around. Then "separator" will replace "newline".
@@ -737,6 +768,14 @@ The string defining the end of a line. It is used in read operations to split th
 Setting this parameter does not change the value of $/ or vice versa.
 
 The "separator" value cannot be an empty string. If it is undef the data is seen as a single string.
+
+=item unique
+
+A scalar. If true Takeput will fail opening a file if it already exists. This can be used to avoid race conditions.
+
+Only used by calls with write intention.
+
+If "unique" is true, calls will work as if "create" is true and "patience" is 0, no matter what they are set to.
 
 =back
 
@@ -799,6 +838,8 @@ C<newline>: undef
 C<patience>: 0
 
 C<separator>: $/ (at compile time)
+
+C<unique>: undef (false)
 
 =head1 ERROR HANDLING
 

@@ -4,7 +4,7 @@ File::Takeput - Slurp style file IO with locking.
 
 # VERSION
 
-0.21
+0.30
 
 # SYNOPSIS
 
@@ -30,9 +30,11 @@ File::Takeput - Slurp style file IO with locking.
 
 # DESCRIPTION
 
-Slurp style file IO with locking. The purpose of Takeput is to make it pleasant for you to script file IO. Slurp style is both user friendly and very effective, if you can have your files in memory.
+Slurp style file IO with locking. The purpose of Takeput is to make it pleasant for you to script file IO. Slurp style is both user friendly and very effective if you can have your files in memory.
 
-The other major point of Takeput is locking. Takeput is careful to help your script be a good citizen in a busy filesystem. All its file operations respect and set flock locking. If your script misses a lock and does not release it, the lock will be released when your script terminates.
+The other major point of Takeput is locking. Takeput is careful to help your script be a good citizen in a busy filesystem. All its file operations respect and set flock locking.
+
+If your script misses a lock and does not release it, the lock will be released when your script terminates.
 
 Encoding is often part of file IO operations, but Takeput keeps out of that. It reads and writes file content just as strings of bytes, in a sort of line-based binmode. Use some other module if you need decoding and encoding. For example:
 
@@ -70,7 +72,11 @@ Imported on demand:
 
 - pass( $filename )
 
-    Releases the lock on the $filename file. The content of the file will be the same as when the lock was taken (if everyone respects the locking). This is useful when a lock was taken with the "take" subroutine, but it later turned out that there was nothing to write to the file.
+    Releases the lock on the $filename file.
+
+    The content of the file will normally be the same as when the lock was taken with the "take" subroutine. This is useful when a lock was taken, but it later turned out that there was nothing to write to the file.
+
+    There are two caveats. If the "create" configuration parameter is true, the file might have been created when it was taken, so it has been changed in that sense. And of course flock locks are only advisory, so other processes can ignore the locks and change the file while it is taken.
 
 - plunk( $filename )->( @data )
 
@@ -84,9 +90,11 @@ Imported on demand:
 
 - take( $filename )
 
-    Sets a lock on the $filename file, reads and returns its content. A call to "take" should later on be followed by a call to "put" or "pass".
+    Sets a lock on the $filename file, reads and returns its content.
 
-    Reading an empty file will return a list with one element, the empty string. If a false value is returned instead, it is because "take" could not read the file.
+    The "take" call has write intention, because it is the first part of an operation. The second part is a call A call to "put" or "pass".
+
+    Opening an empty file will return a list with one element, the empty string. If a false value is returned instead, it is because "take" could not read the file.
 
 - fgrab( $filename )
 
@@ -121,7 +129,7 @@ Imported on demand:
 
 # CONFIGURATION
 
-There are seven configuration parameters.
+There are eight configuration parameters.
 
 - create
 
@@ -163,6 +171,8 @@ There are seven configuration parameters.
         File::Takeput::set(separator => undef , flatten => 1); # Because of this...
         my $fancy_data = Load grab('my_file.yaml');            # ...this will work.
 
+    Note that with "flatten" set to true, reading an empty file returns the empty string, which counts as false. Failing to read a file returns undef. So test for definedness to not be tricked by this.
+
 - newline
 
     A string that replaces the "separator" string at the end of each line when reading from a file. When writing to a file the replacement is the other way around. Then "separator" will replace "newline".
@@ -182,6 +192,14 @@ There are seven configuration parameters.
     Setting this parameter does not change the value of $/ or vice versa.
 
     The "separator" value cannot be an empty string. If it is undef the data is seen as a single string.
+
+- unique
+
+    A scalar. If true Takeput will fail opening a file if it already exists. This can be used to avoid race conditions.
+
+    Only used by calls with write intention.
+
+    If "unique" is true, calls will work as if "create" is true and "patience" is 0, no matter what they are set to.
 
 ## CONFIGURATION OPTIONS
 
@@ -235,6 +253,8 @@ The Takeput defaults are:
 `patience`: 0
 
 `separator`: $/ (at compile time)
+
+`unique`: undef (false)
 
 # ERROR HANDLING
 
